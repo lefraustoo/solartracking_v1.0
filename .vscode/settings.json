@@ -1,6 +1,6 @@
 {
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.formatOnPaste": true,
-  "editor.formatOnSave": true,
-  "cmake.sourceDirectory": "C:/Users/leona/OneDrive/Documentos/PlatformIO/Projects/solartracking/lib/Adafruit_BusIO"
+  "editor.formatOnSave": true
+  // "cmake.sourceDirectory": "C:/Users/leona/OneDrive/Documentos/PlatformIO/Projects/solartracking/lib/Adafruit_BusIO"
 }
