@@ -1,5 +1,5 @@
-#include <INA226.h>
 #include <Arduino.h>
+#include <INA226.h>
 #include <Wire.h>
 
 INA226 ina(0x40); // INA226 I2C address is 0x40
