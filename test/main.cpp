@@ -114,6 +114,7 @@ void setup()
   ina226.waitUntilConversionCompleted(); // if you comment this line the first data might be zero
 
   // !! initial MPU6050 settings
+  
 }
 
 ///////////////////////////////////   LOOP   ////////////////////////////////////
