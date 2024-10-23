@@ -1,3 +1,5 @@
+// Offsets -3120 765 5748 15 9 129
+
 ///////////////////////////////////   LIBRARIES   ////////////////////////////////////
 #include <Arduino.h> // Librería principal de Arduino
 #include <Servo.h>   // Librería para controlar servos
@@ -114,7 +116,6 @@ void setup()
   ina226.waitUntilConversionCompleted(); // if you comment this line the first data might be zero
 
   // !! initial MPU6050 settings
-  
 }
 
 ///////////////////////////////////   LOOP   ////////////////////////////////////
