@@ -1,11 +1,11 @@
-// Offsets -2609 -947 4631 7 -15 -8
-
 ///////////////////////////////////   LIBRARIES   ////////////////////////////////////
 #include <Arduino.h> // Librería principal de Arduino
 #include <Servo.h>   // Librería para controlar servos
 
 #include <Wire.h>
 #include <INA226_WE.h>
+
+#include "MPU6050.h"
 
 ///////////////////////////////////   SERVOS   ////////////////////////////////////
 void ServoMovement();
@@ -44,6 +44,24 @@ void INA226multimeter();
 #define I2C_ADDRESS 0x40
 
 INA226_WE ina226 = INA226_WE(I2C_ADDRESS);
+
+///////////////////////////////////   MPU6050   ////////////////////////////////////
+void printmpu6050values();
+
+MPU6050 accelgyro;
+int16_t ax, ay, az, gx, gy, gz;
+
+// Offsets -2609 -947 4631 7 -15 -8
+
+// Offsets del acelerómetro
+int ax_offset = -2609;
+int ay_offset = -947;
+int az_offset = 4631;
+
+// Offsets del giroscopio
+int gx_offset = 7;
+int gy_offset = -15;
+int gz_offset = -8;
 
 ///////////////////////////////////   SETUP   ////////////////////////////////////
 void setup()
@@ -116,6 +134,22 @@ void setup()
   ina226.waitUntilConversionCompleted(); // if you comment this line the first data might be zero
 
   // !! initial MPU6050 settings
+  accelgyro.initialize();
+  accelgyro.setXAccelOffset(ax_offset);
+  accelgyro.setYAccelOffset(ay_offset);
+  accelgyro.setZAccelOffset(az_offset);
+  accelgyro.setXGyroOffset(gx_offset);
+  accelgyro.setYGyroOffset(gy_offset);
+  accelgyro.setZGyroOffset(gz_offset);
+
+  if (accelgyro.testConnection())
+  {
+    Serial.println("MPU6050 connection successful");
+  }
+  else
+  {
+    Serial.println("MPU6050 connection failed");
+  }
 }
 
 ///////////////////////////////////   LOOP   ////////////////////////////////////

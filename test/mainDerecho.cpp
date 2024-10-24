@@ -1,11 +1,11 @@
-// Offsets -3120 765 5748 15 9 129
-
 ///////////////////////////////////   LIBRARIES   ////////////////////////////////////
 #include <Arduino.h> // Librería principal de Arduino
 #include <Servo.h>   // Librería para controlar servos
 
 #include <Wire.h>
 #include <INA226_WE.h>
+
+#include "MPU6050.h"
 
 ///////////////////////////////////   SERVOS   ////////////////////////////////////
 void ServoMovement();
@@ -45,6 +45,24 @@ void INA226multimeter();
 
 INA226_WE ina226 = INA226_WE(I2C_ADDRESS);
 
+///////////////////////////////////   MPU6050   ////////////////////////////////////
+void printmpu6050values();
+
+MPU6050 accelgyro;
+int16_t ax, ay, az, gx, gy, gz;
+
+// Offsets -3120 765 5748 15 9 129
+
+// Offsets del acelerómetro
+int ax_offset = -3120;
+int ay_offset = 765;
+int az_offset = 5748;
+
+// Offsets del giroscopio
+int gx_offset = 15;
+int gy_offset = 9;
+int gz_offset = 129;
+
 ///////////////////////////////////   SETUP   ////////////////////////////////////
 void setup()
 {
@@ -58,9 +76,9 @@ void setup()
   vertical.write(servov);
 
   // !! initial INA226 settings
+  Wire.begin();
   while (!Serial)
     ; // wait until serial comes up on Arduino Leonardo or MKR WiFi 1010
-  Wire.begin();
   ina226.init();
 
   /* Set Number of measurements for shunt and bus voltage which shall be averaged
@@ -116,12 +134,30 @@ void setup()
   ina226.waitUntilConversionCompleted(); // if you comment this line the first data might be zero
 
   // !! initial MPU6050 settings
+  accelgyro.initialize();
+  accelgyro.setXAccelOffset(ax_offset);
+  accelgyro.setYAccelOffset(ay_offset);
+  accelgyro.setZAccelOffset(az_offset);
+  accelgyro.setXGyroOffset(gx_offset);
+  accelgyro.setYGyroOffset(gy_offset);
+  accelgyro.setZGyroOffset(gz_offset);
+
+  if (accelgyro.testConnection())
+  {
+    Serial.println("MPU6050 connection successful");
+  }
+  else
+  {
+    Serial.println("MPU6050 connection failed");
+  }
 }
 
 ///////////////////////////////////   LOOP   ////////////////////////////////////
 void loop()
 {
   ServoMovement();
+  INA226multimeter();
+  printmpu6050values();
 }
 
 ///////////////////////////////////   FUNCTIONS   ////////////////////////////////////
@@ -257,6 +293,25 @@ void INA226multimeter()
   Serial.println();
 
   delay(3000);
+}
+
+void printmpu6050values()
+{
+  accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+  Serial.print("Acelerómetro: ax = ");
+  Serial.print(ax);
+  Serial.print(" | ay = ");
+  Serial.print(ay);
+  Serial.print(" | az = ");
+  Serial.println(az);
+
+  Serial.print("Giroscopio: gx = ");
+  Serial.print(gx);
+  Serial.print(" | gy = ");
+  Serial.print(gy);
+  Serial.print(" | gz = ");
+  Serial.println(gz);
 }
 
 // End of code.
