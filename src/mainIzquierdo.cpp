@@ -51,17 +51,27 @@ void printmpu6050values();
 MPU6050 accelgyro;
 int16_t ax, ay, az, gx, gy, gz;
 
-// Offsets -2609 -947 4631 7 -15 -8
+/*
+
+Offsets
+-2573
+-937
+4657
+2
+-10
+-9
+
+*/
 
 // Offsets del acelerómetro
-int ax_offset = -2609;
-int ay_offset = -947;
-int az_offset = 4631;
+int ax_offset = -2573;
+int ay_offset = -937;
+int az_offset = 4657;
+int gx_offset = 2;
+int gy_offset = -10;
+int gz_offset = -9;
 
 // Offsets del giroscopio
-int gx_offset = 7;
-int gy_offset = -15;
-int gz_offset = -8;
 
 ///////////////////////////////////   SETUP   ////////////////////////////////////
 void setup()
@@ -156,6 +166,8 @@ void setup()
 void loop()
 {
   ServoMovement();
+  INA226multimeter();
+  printmpu6050values();
 }
 
 ///////////////////////////////////   FUNCTIONS   ////////////////////////////////////
@@ -290,7 +302,25 @@ void INA226multimeter()
   }
   Serial.println();
 
-  delay(3000);
+  // delay(3000);
 }
 
+void printmpu6050values()
+{
+  accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+  Serial.print("Acelerómetro: ax = ");
+  Serial.print(ax);
+  Serial.print(" | ay = ");
+  Serial.print(ay);
+  Serial.print(" | az = ");
+  Serial.println(az);
+
+  Serial.print("Giroscopio: gx = ");
+  Serial.print(gx);
+  Serial.print(" | gy = ");
+  Serial.print(gy);
+  Serial.print(" | gz = ");
+  Serial.println(gz);
+}
 // End of code.
