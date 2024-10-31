@@ -49,6 +49,7 @@ MPU6050 sensor;
 
 // Valores RAW (sin procesar) del acelerometro  en los ejes x,y,z
 int16_t ax, ay, az;
+int ax, ay, az;
 
 ///////////////////////////////////   VARIABLES   ////////////////////////////////////
 void rotaciones();
@@ -57,6 +58,7 @@ void rotaciones();
 // del estado de AD0. Si no se especifica, 0x68 estará implicito
 
 // Valores RAW (sin procesar) del acelerometro y giroscopio en los ejes x,y,z
+int16_t gx, gy, gz;
 int gx, gy, gz;
 
 long tiempo_prev, dt;

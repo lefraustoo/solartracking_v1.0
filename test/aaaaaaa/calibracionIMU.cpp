@@ -49,7 +49,6 @@ int giro_deadzone = 1; // Giro error allowed, make it lower to get more precisio
 // AD0 high = 0x69
 // MPU6050 accelgyro;
 MPU6050 accelgyro(0x68); // <-- use for AD0 high
-
 int16_t ax, ay, az, gx, gy, gz;
 
 int mean_ax, mean_ay, mean_az, mean_gx, mean_gy, mean_gz, state = 0;

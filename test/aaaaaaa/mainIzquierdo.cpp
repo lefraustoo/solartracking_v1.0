@@ -43,12 +43,12 @@ void INA226multimeter();
 
 #define I2C_ADDRESS 0x40
 
-INA226_WE ina226 = INA226_WE(I2C_ADDRESS);
+INA226_WE ina226 = INA226_WE(I2C_ADDRESS); // I2C address 0x40 (default) or 0x41 (if A0 pin is connected to VCC) or 0x44 (if A0 pin is connected to SDA) or 0x45 (if A0 pin is connected to SCL)
 
-///////////////////////////////////   MPU6050   ////////////////////////////////////
-void printmpu6050values();
+///////////////////////////////////   MPU6050 vertical  ////////////////////////////////////
+void printmpu6050valuesv();
 
-MPU6050 accelgyro;
+MPU6050 accelgyro(0x68); // <-- use for AD0 high (0x69) or AD0 low (0x68) depending on your MPU6050 board design (AD0 is logic low or high respectively)
 int16_t ax, ay, az, gx, gy, gz;
 
 /*
@@ -71,7 +71,31 @@ int gx_offset = 2;
 int gy_offset = -10;
 int gz_offset = -9;
 
-// Offsets del giroscopio
+///////////////////////////////////   MPU6050 horizontal  ////////////////////////////////////
+void printmpu6050valuesh();
+
+MPU6050 accelgyro2(0x69);
+int16_t ax, ay, az, gx, gy, gz;
+
+/*
+
+Offsets
+-2573
+-937
+4657
+2
+-10
+-9
+
+*/
+
+// Offsets del acelerómetro
+int ax_offset = -2573;
+int ay_offset = -937;
+int az_offset = 4657;
+int gx_offset = 2;
+int gy_offset = -10;
+int gz_offset = -9;
 
 ///////////////////////////////////   SETUP   ////////////////////////////////////
 void setup()
@@ -144,6 +168,7 @@ void setup()
   ina226.waitUntilConversionCompleted(); // if you comment this line the first data might be zero
 
   // !! initial MPU6050 settings
+  accelgyro2.initialize();
   accelgyro.initialize();
   accelgyro.setXAccelOffset(ax_offset);
   accelgyro.setYAccelOffset(ay_offset);
