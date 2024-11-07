@@ -130,10 +130,6 @@ void setup()
     Serial.println("INA226 Current Sensor Example Sketch - Continuous");
 
     // ina226.waitUntilConversionCompleted(); // if you comment this line the first data might be zero
-
-    // !! initial MPU6050 settings for the base
-    
-
 }
 
 ///////////////////////////////////   LOOP   ////////////////////////////////////
