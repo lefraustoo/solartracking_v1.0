@@ -38,5 +38,5 @@ void loop()
     else
         Serial.println("Escaneo finalizado");
 
-    delay(5000); // Vuelve a escanear cada 5 segundos
+    delay(1000); // Vuelve a escanear cada segundo
 }
