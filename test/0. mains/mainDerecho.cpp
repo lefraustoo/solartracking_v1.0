@@ -77,8 +77,6 @@ void setup()
 
   // !! initial INA226 settings
   Wire.begin();
-  while (!Serial)
-    ; // wait until serial comes up on Arduino Leonardo or MKR WiFi 1010
   ina226.init();
 
   /* Set Number of measurements for shunt and bus voltage which shall be averaged
@@ -131,7 +129,7 @@ void setup()
 
   Serial.println("INA226 Current Sensor Example Sketch - Continuous");
 
-  ina226.waitUntilConversionCompleted(); // if you comment this line the first data might be zero
+  // ina226.waitUntilConversionCompleted(); // if you comment this line the first data might be zero
 
   // !! initial MPU6050 settings
   accelgyro.initialize();
