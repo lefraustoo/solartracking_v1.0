@@ -66,7 +66,7 @@ int gz_offset = 129;
 ///////////////////////////////////   SETUP   ////////////////////////////////////
 void setup()
 {
-    // !! initialize serial communication
+    // !! initial general settings
     Serial.begin(9600);
 
     // !! initial servo settings
@@ -130,6 +130,10 @@ void setup()
     Serial.println("INA226 Current Sensor Example Sketch - Continuous");
 
     // ina226.waitUntilConversionCompleted(); // if you comment this line the first data might be zero
+
+    // !! initial MPU6050 settings
+
+    // !! initial Teensy settings (tx, rx)
 }
 
 ///////////////////////////////////   LOOP   ////////////////////////////////////
