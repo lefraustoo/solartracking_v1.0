@@ -1,30 +1,8 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 
-SoftwareSerial ArduinoSlave(2, 3);
+SoftwareSerial ArduinoSlave(0, 1); // RX, TX
 String msg;
-
-void setup()
-{
-
-  Serial.begin(9600);
-  Serial.println("ENTER Commands:");
-  ArduinoSlave.begin(9600);
-}
-
-void loop()
-{
-  readSlave();      // Leer el puerto
-  readSerialPort(); // Leer el monitor
-
-  if (msg != "")
-  {
-    Serial.print("Master sent : "); // Enviar data slave
-    Serial.println(msg);
-    ArduinoSlave.print(msg);
-    msg = "";
-  }
-}
 
 void readSerialPort()
 {
@@ -57,4 +35,26 @@ void readSlave()
   }
 
   ArduinoSlave.flush();
+}
+
+void setup()
+{
+
+  Serial.begin(9600);
+  Serial.println("ENTER Commands:");
+  ArduinoSlave.begin(9600);
+}
+
+void loop()
+{
+  readSlave();      // Leer el puerto
+  readSerialPort(); // Leer el monitor
+
+  if (msg != "")
+  {
+    Serial.print("Master sent : "); // Enviar data slave
+    Serial.println(msg);
+    ArduinoSlave.print(msg);
+    msg = "";
+  }
 }
