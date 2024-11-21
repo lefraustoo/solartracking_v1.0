@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 
-SoftwareSerial ArduinoMaster(2, 3); // RX, TX
+SoftwareSerial ArduinoMaster(7, 8); // RX, TX
 String msg;
 
 void readMasterPort()
