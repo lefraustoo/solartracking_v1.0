@@ -1,14 +1,18 @@
+///////////////////////////////////   LIBRARIES   ////////////////////////////////////
 #include <Arduino.h>        // librería principal de Arduino
 #include <SoftwareSerial.h> // librería para la comunicación serial por software
+#include <SD.h>             //librería para el manejo de una tarjeta SD, es la misma que utilizan las tarjetas Arduino
+#include <SPI.h>            //librería para la comunicación vía protocolo SPI
 
-#include <SD.h>  //librería para el manejo de una tarjeta SD, es la misma que utilizan las tarjetas Arduino
-#include <SPI.h> //librería para la comunicación vía protocolo SPI
+///////////////////////////////   GUARDADO DE DATOS   ////////////////////////////////
 
 const int chipSelect = 10; // declaración del pin CS embebido de la tarjeta
 
+//////////////////////////////////   COMUNICACION   //////////////////////////////////
 SoftwareSerial ArduinoMaster(7, 8); // RX, TX
 String msg;
 
+//////////////////////////////////   RECEPCION   /////////////////////////////////////
 void readMasterPort()
 {
   while (ArduinoMaster.available())
@@ -23,6 +27,7 @@ void readMasterPort()
   ArduinoMaster.flush();
 }
 
+/////////////////////////////////////   SETUP   //////////////////////////////////////
 void setup()
 {
   Serial.begin(9600);
@@ -44,6 +49,7 @@ void setup()
   Serial.println("initialization done.");
 }
 
+/////////////////////////////////////   LOOP   //////////////////////////////////////
 void loop()
 {
   readMasterPort();
