@@ -2,7 +2,11 @@
 #include <SD.h>      //librería para el manejo de una tarjeta SD, es la misma que utilizan las tarjetas Arduino
 #include <SPI.h>     //librería para la comunicación vía protocolo SPI
 
-const int chipSelect = 10; // declaración del pin CS embebido de la tarjeta
+#ifndef BUILTIN_SDCARD
+#define BUILTIN_SDCARD 10 // Pin CS embebido para Teensy 4.1 (modificar según tu placa)
+#endif
+
+const int chipSelect = BUILTIN_SDCARD; // declaración del pin CS embebido de la tarjeta
 
 String dataStringA0 = ""; // cadena de datos para almacenar el valor del primer sensor análogo
 String dataStringA1 = ""; // cadena de datos para almacenar el valor del segundo sensor análogo

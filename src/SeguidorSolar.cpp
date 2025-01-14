@@ -1,15 +1,16 @@
 ///////////////////////////////////   LIBRARIES   ////////////////////////////////////
 #include <Arduino.h> // Librería principal de Arduino
-#include <Servo.h>   // Librería para controlar servos
+
+#include <Servo.h> // Librería para controlar servos
 
 #include <Wire.h>      // Librería para comunicación I2C
 #include <INA226_WE.h> // Librería para controlar el módulo INA226
 
-#include "MPU6050.h" // Librería para controlar el módulo MPU6050
+#include <SD.h> // Librería para comunicación con tarjetas SD
 
-#include <SoftwareSerial.h> // Librería para comunicación serial
+#include <RTClib.h> // Librería para controlar el módulo RTC
+#include <SPI.h>    // Librería para comunicación SPI
 
-///////////////////////////////////   SERVOS   ////////////////////////////////////
 void ServoMovement();
 
 #define SERVOPINH 5 // horizontal servo
@@ -40,17 +41,44 @@ const int ldrrt = A1; // top right
 const int ldrld = A2; // down left
 const int ldrrd = A3; // down right
 
+// Read the illuminance values ​​of 4 photoresistor modules respectively
+int lt;
+int rt;
+int ld;
+int rd;
+
+// Average readings from adjacent photoresistor modules
+int avt;
+int avd;
+int avl;
+int avr;
+
+int veg;
+
+int dvert;
+int dhoriz;
+
 ///////////////////////////////////   INA226   ////////////////////////////////////
 void INA226multimeter();
 
 #define I2C_ADDRESS 0x40
 INA226_WE ina226 = INA226_WE(I2C_ADDRESS);
 
+float shuntVoltage_mV = 0.0;
+float loadVoltage_V = 0.0;
+float busVoltage_V = 0.0;
+float current_mA = 0.0;
+float power_mW = 0.0;
+
 ///////////////////////////////////   MPU6050   ////////////////////////////////////
 
-////////////////////////////////   COMUNICATION   /////////////////////////////////
-SoftwareSerial ArduinoSlave(7, 8); // RX, TX
-String msg;
+/////////////////////////////////////   SD   //////////////////////////////////////
+File SeguidorSolar;
+void guardadoSD();
+
+///////////////////////////////////   RELOJ   ////////////////////////////////////
+RTC_DS3231 rtc;
+DateTime now = rtc.now();
 
 ///////////////////////////////////   SETUP   ////////////////////////////////////
 void setup()
@@ -79,7 +107,7 @@ void setup()
       AVERAGE_512        512
       AVERAGE_1024      1024*/
 
-    // ina226.setAverage(AVERAGE_16); // choose mode and uncomment for change of default
+    // ina226.setAverage(AVERAGE_16); // ? choose mode and uncomment for change of default
 
     /* Set conversion time in microseconds
        One set of shunt and bus voltage conversion will take:
@@ -95,67 +123,87 @@ void setup()
        CONV_TIME_4156       4.156 ms
        CONV_TIME_8244       8.244 ms  */
 
-    // ina226.setConversionTime(CONV_TIME_1100); //choose conversion time and uncomment for change of default
+    // ina226.setConversionTime(CONV_TIME_1100); // ? choose conversion time and uncomment for change of default
 
     /* Set measure mode
       POWER_DOWN - INA226 switched off
       TRIGGERED  - measurement on demand
       CONTINUOUS  - continuous measurements (default)*/
 
-    // ina226.setMeasureMode(CONTINUOUS); // choose mode and uncomment for change of default
+    // ina226.setMeasureMode(CONTINUOUS); // ? choose mode and uncomment for change of default
 
     /* Set Resistor and Current Range
        if resistor is 5.0 mOhm, current range is up to 10.0 A
        default is 100 mOhm and about 1.3 A*/
 
-    ina226.setResistorRange(0.1, 1.3); // choose resistor 0.1 Ohm and gain range up to 1.3A
+    ina226.setResistorRange(0.1, 1.3); // ? choose resistor 0.1 Ohm and gain range up to 1.3A
 
     /* If the current values delivered by the INA226 differ by a constant factor
        from values obtained with calibrated equipment you can define a correction factor.
        Correction factor = current delivered from calibrated equipment / current delivered by INA226 */
 
-    ina226.setCorrectionFactor(0.93);
+    ina226.setCorrectionFactor(0.93); // ? choose correction factor and uncomment for change of default
 
-    Serial.println("INA226 Current Sensor Example Sketch - Continuous");
-
-    // ina226.waitUntilConversionCompleted(); // if you comment this line the first data might be zero
+    // ina226.waitUntilConversionCompleted(); // ? if you comment this line the first data might be zero
 
     // !! initial MPU6050 settings
 
-    // !! initial Teensy settings (tx, rx)
-    Serial.println("Active Master");
-    ArduinoSlave.begin(9600);
+    // !! initial SD settings
+    Serial.print(F("Iniciando SD ..."));
+
+    // Inicialización de la SD
+    if (!SD.begin(10))
+    {
+        Serial.println("Error al inicializar la SD.");
+        return;
+    }
+
+    // Abrir el archivo una vez
+    SeguidorSolar = SD.open("datas.txt", FILE_WRITE);
+    if (!SeguidorSolar)
+    {
+        Serial.println("Error al abrir el archivo datas.txt");
+        return;
+    }
+
+    Serial.println(F("Iniciado correctamente"));
+
+    // Comprobamos si tenemos el RTC conectado
+    if (!rtc.begin())
+    {
+        Serial.println("No hay un módulo RTC");
+        while (1)
+            ;
+    }
+
+    // Ponemos en hora, solo la primera vez, luego comentar y volver a cargar.
+    // Ponemos en hora con los valores de la fecha y la hora en que el sketch ha sido compilado.
+    // rtc.adjust(DateTime(2025, 1, 14, 16, 10, 10));
 }
 
 ///////////////////////////////////   LOOP   ////////////////////////////////////
 void loop()
 {
-    ServoMovement();
-    INA226multimeter();
-
-    // readSlave();      // Leer el puerto
-    // readSerialPort(); // Leer el monitor
+    guardadoSD();
 }
 
 ///////////////////////////////////   FUNCTIONS   ////////////////////////////////////
 void ServoMovement()
 {
-    // Read the illuminance values ​​of 4 photoresistor modules respectively
-    int lt = analogRead(ldrlt); // upper left
-    int rt = analogRead(ldrrt); // top right
-    int ld = analogRead(ldrld); // down left
-    int rd = analogRead(ldrrd); // down right
 
-    Serial.print("SensoresServo: | lt: " + String(lt) + " | rt: " + String(rt) + " | ld: " + String(ld) + " | rd: " + String(rd) + " |");
-    ArduinoSlave.print("SensoresServo: | lt: " + String(lt) + " | rt: " + String(rt) + " | ld: " + String(ld) + " | rd: " + String(rd) + " |");
+    // Read the illuminance values ​​of 4 photoresistor modules respectively
+    lt = analogRead(ldrlt); // upper left
+    rt = analogRead(ldrrt); // top right
+    ld = analogRead(ldrld); // down left
+    rd = analogRead(ldrrd); // down right
 
     // Average readings from adjacent photoresistor modules
-    int avt = (lt + rt) / 2;
-    int avd = (ld + rd) / 2;
-    int avl = (lt + ld) / 2;
-    int avr = (rt + rd) / 2;
+    avt = (lt + rt) / 2;
+    avd = (ld + rd) / 2;
+    avl = (lt + ld) / 2;
+    avr = (rt + rd) / 2;
 
-    int veg = (avt + avd + avl + avr) / 4;
+    veg = (avt + avd + avl + avr) / 4;
 
     // Adjust response parameters according to different light intensities
     if (0 < veg && veg < 300)
@@ -169,12 +217,9 @@ void ServoMovement()
         dtime = 50;
     }
 
-    Serial.println("ParametrosServo: | veg: " + String(veg) + " | tol: " + String(tol) + " | dtime: " + String(dtime) + " |");
-    ArduinoSlave.println("ParametrosServo: | veg: " + String(veg) + " | tol: " + String(tol) + " | dtime: " + String(dtime) + " |");
-
     // Then calculate the difference between the upper and lower rows and the average value of the left and right rows
-    int dvert = avt - avd;  // upper and lower rows
-    int dhoriz = avl - avr; // left and right rows
+    dvert = avt - avd;  // upper and lower rows
+    dhoriz = avl - avr; // left and right rows
 
     // Check if the difference is within tolerance, otherwise change the vertical angle
     if (-1 * tol > dvert || dvert > tol)
@@ -211,7 +256,7 @@ void ServoMovement()
         }
         else if (avl > avr)
         {
-            servoh = ++servoh;
+            servoh = ++servov;
             if (servoh > servohLimitHigh)
             {
                 servoh = servohLimitHigh;
@@ -220,75 +265,123 @@ void ServoMovement()
         horizontal.write(servoh); // If the rotation angle of the servo is opposite to the light, use (180- servoh) or (servoh) to change the direction
     }
 
-    delay(dtime);
+    // delay(dtime);
 }
 
 void INA226multimeter()
 {
-    float shuntVoltage_mV = 0.0;
-    float loadVoltage_V = 0.0;
-    float busVoltage_V = 0.0;
-    float current_mA = 0.0;
-    float power_mW = 0.0;
-
     ina226.readAndClearFlags();
+
     shuntVoltage_mV = ina226.getShuntVoltage_mV();
     busVoltage_V = ina226.getBusVoltage_V();
     current_mA = ina226.getCurrent_mA();
     power_mW = ina226.getBusPower();
     loadVoltage_V = busVoltage_V + (shuntVoltage_mV / 1000);
 
-    Serial.println("INA226: | Shunt Voltage [mV]: " + String(shuntVoltage_mV) + " | Bus Voltage [V]: " + String(busVoltage_V) + " | Load Voltage [V]: " + String(loadVoltage_V) + " | Current[mA]: " + String(current_mA) + " | Bus Power [mW]: " + String(power_mW) + " |");
-    ArduinoSlave.println("INA226: | Shunt Voltage [mV]: " + String(shuntVoltage_mV) + " | Bus Voltage [V]: " + String(busVoltage_V) + " | Load Voltage [V]: " + String(loadVoltage_V) + " | Current[mA]: " + String(current_mA) + " | Bus Power [mW]: " + String(power_mW) + " |");
-
     if (!ina226.overflow)
     {
-        Serial.println("Values OK - no overflow");
-        ArduinoSlave.println("Values OK - no overflow");
+        Serial.println("Values OK - no overflow \n");
     }
     else
     {
-        Serial.println("Overflow! Choose higher current range");
-        ArduinoSlave.println("Overflow! Choose higher current range");
+        Serial.println("Overflow! Choose higher current rang \n");
     }
-    Serial.println();
-    ArduinoSlave.println();
+
+    // delay(3000);
+}
+
+void guardadoSD()
+{
+
+    SeguidorSolar.close();
+    SeguidorSolar = SD.open("datas.txt", FILE_WRITE);
+
+    if (SeguidorSolar)
+    {
+        ServoMovement();
+        INA226multimeter();
+
+        DateTime now = rtc.now();
+
+        // Escribir fecha y hora
+        Serial.print(now.day());
+        Serial.print('/');
+        Serial.print(now.month());
+        Serial.print('/');
+        Serial.print(now.year());
+        Serial.print(' ');
+
+        Serial.print(now.hour());
+        Serial.print(':');
+        Serial.print(now.minute());
+        Serial.print(':');
+        Serial.println(now.second());
+
+        // Escribir datos de los sensores
+        Serial.print("SensoresServo: | lt: ");
+        Serial.print(lt);
+        Serial.print(" | rt: ");
+        Serial.print(rt);
+        Serial.print(" | ld: ");
+        Serial.print(ld);
+        Serial.print(" | rd: ");
+        Serial.println(rd);
+
+        // Escribir datos del INA226
+        Serial.print("INA226: | Shunt Voltage [mV]: ");
+        Serial.print(shuntVoltage_mV);
+        Serial.print(" | Bus Voltage [V]: ");
+        Serial.print(busVoltage_V);
+        Serial.print(" | Load Voltage [V]: ");
+        Serial.print(loadVoltage_V);
+        Serial.print(" | Current[mA]: ");
+        Serial.println(current_mA);
+
+        // Escribir fecha y hora
+        SeguidorSolar.print(now.day());
+        SeguidorSolar.print('/');
+        SeguidorSolar.print(now.month());
+        SeguidorSolar.print('/');
+        SeguidorSolar.print(now.year());
+        SeguidorSolar.print(' ');
+
+        SeguidorSolar.print(now.hour());
+        SeguidorSolar.print(':');
+        SeguidorSolar.print(now.minute());
+        SeguidorSolar.print(':');
+        SeguidorSolar.println(now.second());
+
+        /////////////////////////////////////// GUARDADO DE DATOS ///////////////////////////////////////
+
+        // Escribir datos de los sensores
+        SeguidorSolar.print("SensoresServo: | lt: ");
+        SeguidorSolar.print(lt);
+        SeguidorSolar.print(" | rt: ");
+        SeguidorSolar.print(rt);
+        SeguidorSolar.print(" | ld: ");
+        SeguidorSolar.print(ld);
+        SeguidorSolar.print(" | rd: ");
+        SeguidorSolar.println(rd);
+
+        // Escribir datos del INA226
+        SeguidorSolar.print("INA226: | Shunt Voltage [mV]: ");
+        SeguidorSolar.print(shuntVoltage_mV);
+        SeguidorSolar.print(" | Bus Voltage [V]: ");
+        SeguidorSolar.print(busVoltage_V);
+        SeguidorSolar.print(" | Load Voltage [V]: ");
+        SeguidorSolar.print(loadVoltage_V);
+        SeguidorSolar.print(" | Current[mA]: ");
+        SeguidorSolar.println(current_mA);
+
+        SeguidorSolar.flush();
+        SeguidorSolar.close();
+    }
+    else
+    {
+        Serial.println("Error al escribir en la SD");
+    }
 
     delay(3000);
 }
 
-void readSerialPort()
-{
-    while (Serial.available())
-    {
-        delay(10);
-        if (Serial.available() > 0)
-        {
-            char c = Serial.read(); // leer un byte desde el buffer
-            msg += c;               // concatenar al String
-        }
-    }
-    Serial.flush(); // limpiar buffer
-}
-
-// void readSlave()
-// {
-//     while (ArduinoSlave.available())
-//     {
-//         delay(10);
-//         if (ArduinoSlave.available() > 0)
-//         {
-//             char c = ArduinoSlave.read(); // leer un byte desde el buffer
-//             msg += c;                     // concatenar al String
-//         }
-//     }
-//     if (msg != "") // saber si hay retorno del esclavo
-//     {
-//         Serial.println("Slave return: " + msg);
-//         msg = "";
-//     }
-
-//     ArduinoSlave.flush();
-// }
-
-// End of code.
+// ! End of code.
