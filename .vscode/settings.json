@@ -2,6 +2,7 @@
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.formatOnPaste": true,
   "editor.formatOnSave": true,
-  "cmake.ignoreCMakeListsMissing": true
+  "cmake.ignoreCMakeListsMissing": true,
+  "C_Cpp.errorSquiggles": "disabled"
   // "cmake.sourceDirectory": "C:/Users/leona/OneDrive/Documentos/PlatformIO/Projects/solartracking/lib/Adafruit_BusIO"
 }
