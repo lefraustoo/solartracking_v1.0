@@ -11,11 +11,9 @@
 
 #include <Adafruit_I2CDevice.h>
 
-#define SERVOPINH 5 // horizontal servo
-#define SERVOPINV 6 // vertical servo
+#define SERVOPINH 6 // horizontal servo
 
 Servo horizontal; // horizontal servo
-Servo vertical;   // vertical servo
 
 void setup()
 {
@@ -24,9 +22,6 @@ void setup()
 
     // !! initial servo settings
     horizontal.attach(SERVOPINH);
-    vertical.attach(SERVOPINV);
-    horizontal.write(180);
-    vertical.write(95);
 }
 
 void loop()
@@ -35,29 +30,17 @@ void loop()
     {
         horizontal.write(i);
         Serial.println(i);
-        delay(100);
+        delay(10);
     }
+
+    delay(1000);
 
     for (int i = 180; i > 0; i--)
     {
         horizontal.write(i);
         Serial.println(i);
-        delay(100);
+        delay(10);
     }
 
     delay(1000);
-
-    for (int i = 0; i < 180; i++)
-    {
-        vertical.write(i);
-        Serial.println(i);
-        delay(100);
-    }
-
-    for (int i = 180; i > 0; i--)
-    {
-        vertical.write(i);
-        Serial.println(i);
-        delay(100);
-    }
 }

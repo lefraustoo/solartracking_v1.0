@@ -1,15 +1,25 @@
 ///////////////////////////////////   LIBRARIES   ////////////////////////////////////
 #include <Arduino.h> // Librería principal de Arduino
-#include <Servo.h>   // Librería para controlar servos
+
+#include <Servo.h> // Librería para controlar servos
 
 #include <Wire.h>      // Librería para comunicación I2C
 #include <INA226_WE.h> // Librería para controlar el módulo INA226
 
 #include <SD.h> // Librería para comunicación con tarjetas SD
 
+#include <RTClib.h> // Librería para controlar el módulo RTC
+#include <SPI.h>    // Librería para comunicación SPI
+
 ///////////////////////////////////   SERVOS   ////////////////////////////////////
+
+void ServoMovement();
+
 #define SERVOPINH 5 // horizontal servo
 #define SERVOPINV 6 // vertical servo
+
+#define POTPINH A0
+#define POTPINV A2
 
 // Horizontal servo settings
 Servo horizontal;          // horizontal servo
@@ -19,9 +29,15 @@ int servohLimitLow = 0;    // The minimum angle of rotation in the horizontal di
 
 // Vertical Servo Settings
 Servo vertical;            // vertical servo
-int servov = 95;           // Initialize angle
+int servov = 90;           // Initialize angle
 int servovLimitHigh = 270; // The maximum angle of rotation in the vertical direction
 int servovLimitLow = 0;    // The minimum angle of rotation in the vertical direction
+
+int Ahoriz;
+int Avert;
+
+const int potPinH = A0; // Potenciometro horizontal
+const int potPinV = A1; // Potenciometro vertical
 
 ///////////////////////////////////   INA226   ////////////////////////////////////
 void INA226multimeter();
@@ -35,11 +51,13 @@ float busVoltage_V = 0.0;
 float current_mA = 0.0;
 float power_mW = 0.0;
 
-///////////////////////////////////   MPU6050   ////////////////////////////////////
-
 /////////////////////////////////////   SD   //////////////////////////////////////
-File SolarFijo;
+File solarfijo;
 void guardadoSD();
+
+///////////////////////////////////   RELOJ   ////////////////////////////////////
+RTC_DS3231 rtc;
+DateTime now = rtc.now();
 
 ///////////////////////////////////   SETUP   ////////////////////////////////////
 void setup()
@@ -50,8 +68,13 @@ void setup()
     // !! initial servo settings
     horizontal.attach(SERVOPINH);
     vertical.attach(SERVOPINV);
-    horizontal.write(servoh);
-    vertical.write(servov);
+
+    horizontal.write(90);
+    vertical.write(90);
+
+    // !! initial potenciometers settings
+    pinMode(POTPINH, INPUT);
+    pinMode(POTPINV, INPUT);
 
     // !! initial INA226 settings
     Wire.begin();
@@ -105,29 +128,48 @@ void setup()
 
     ina226.setCorrectionFactor(0.93); // ? choose correction factor and uncomment for change of default
 
-    Serial.println("-- INA226 Current Sensor Example Sketch - Continuous -- \n\n"); // ? uncomment for change of default
-
     // ina226.waitUntilConversionCompleted(); // ? if you comment this line the first data might be zero
-
-    // !! initial MPU6050 settings
 
     // !! initial SD settings
     Serial.print(F("Iniciando SD ..."));
 
-    if (!SD.begin(9))
-    { // Inicializar SD en pin 9
-        Serial.println(F("Error al iniciar"));
+    // Inicialización de la SD
+    if (!SD.begin(10))
+    {
+        Serial.println("Error al inicializar la SD.");
+        return;
+    }
+
+    // Abrir el archivo una vez
+    solarfijo = SD.open("dataf.txt", FILE_WRITE);
+
+    if (!solarfijo)
+    {
+        Serial.println("Error al abrir el archivo datas.txt");
         return;
     }
 
     Serial.println(F("Iniciado correctamente"));
+
+    // Comprobamos si tenemos el RTC conectado
+    if (!rtc.begin())
+    {
+        Serial.println("No hay un módulo RTC");
+        while (1)
+            ;
+    }
+
+    // Ponemos en hora, solo la primera vez, luego comentar y volver a cargar.
+    // Ponemos en hora con los valores de la fecha y la hora en que el sketch ha sido compilado.
+    // rtc.adjust(DateTime(2025, 1, 14, 16, 10, 10));
 }
 
 ///////////////////////////////////   LOOP   ////////////////////////////////////
 void loop()
 {
-    INA226multimeter();
-    guardadoSD();
+    ServoMovement();
+    // INA226multimeter();
+    // guardadoSD();
 }
 
 ///////////////////////////////////   FUNCTIONS   ////////////////////////////////////
@@ -141,39 +183,109 @@ void INA226multimeter()
     power_mW = ina226.getBusPower();
     loadVoltage_V = busVoltage_V + (shuntVoltage_mV / 1000);
 
-    delay(3000);
+    if (!ina226.overflow)
+    {
+        Serial.println("Values OK - no overflow \n");
+    }
+    else
+    {
+        Serial.println("Overflow! Choose higher current rang \n");
+    }
+
+    // delay(3000);
+}
+
+void ServoMovement()
+{
+    int potValueH = analogRead(POTPINH);
+    int potValueV = analogRead(POTPINV);
+
+    int angleH = map(potValueH, 0, 1023, 0, 180);
+    int angleV = map(potValueV, 0, 1023, 0, 180);
+
+    Serial.print("Horizontal: ");
+    Serial.print(angleH);
+    Serial.print(" Vertical: ");
+    Serial.println(angleV);
+
+    Serial.print("Potenciometer H: ");
+    Serial.print(potValueH);
+    Serial.print(" Potenciometer V: ");
+    Serial.println(potValueV);
+
+    horizontal.write(angleH);
+    vertical.write(angleV);
 }
 
 void guardadoSD()
 {
-    // Abrir el archivo y escribir el valor
-    SolarFijo = SD.open("dataf.txt", FILE_WRITE);
 
-    if (SolarFijo)
+    // solarfijo.close();
+    solarfijo = SD.open("dataf.txt", FILE_WRITE);
+
+    if (solarfijo)
     {
+        DateTime now = rtc.now();
 
-        SolarFijo.println("INA226: | Shunt Voltage [mV]: " + String(shuntVoltage_mV) + " | Bus Voltage [V]: " + String(busVoltage_V) + " | Load Voltage [V]: " + String(loadVoltage_V) + " | Current[mA]: " + String(current_mA) + " | Bus Power [mW]: " + String(power_mW) + " | \n");
-        Serial.println("INA226: | Shunt Voltage [mV]: " + String(shuntVoltage_mV) + " | Bus Voltage [V]: " + String(busVoltage_V) + " | Load Voltage [V]: " + String(loadVoltage_V) + " | Current[mA]: " + String(current_mA) + " | Bus Power [mW]: " + String(power_mW) + " | \n");
+        // Escribir fecha y hora
+        Serial.print(now.day());
+        Serial.print('/');
+        Serial.print(now.month());
+        Serial.print('/');
+        Serial.print(now.year());
+        Serial.print(' ');
 
-        if (!ina226.overflow)
-        {
-            SolarFijo.println("Values OK - no overflow ");
-            Serial.println("Values OK - no overflow ");
-        }
-        else
-        {
-            SolarFijo.println("Overflow! Choose higher current rang");
-            Serial.println("Overflow! Choose higher current rang");
-        }
+        Serial.print(now.hour());
+        Serial.print(':');
+        Serial.print(now.minute());
+        Serial.print(':');
+        Serial.println(now.second());
 
-        SolarFijo.close();
+        // Escribir datos del INA226
+        Serial.print("INA226: | Shunt Voltage [mV]: ");
+        Serial.print(shuntVoltage_mV);
+        Serial.print(" | Bus Voltage [V]: ");
+        Serial.print(busVoltage_V);
+        Serial.print(" | Load Voltage [V]: ");
+        Serial.print(loadVoltage_V);
+        Serial.print(" | Current[mA]: ");
+        Serial.println(current_mA);
+
+        /////////////////////////////////////// GUARDADO DE DATOS ///////////////////////////////////////
+
+        // Escribir fecha y hora
+        solarfijo.print(now.day());
+        solarfijo.print('/');
+        solarfijo.print(now.month());
+        solarfijo.print('/');
+        solarfijo.print(now.year());
+        solarfijo.print(' ');
+
+        solarfijo.print(now.hour());
+        solarfijo.print(':');
+        solarfijo.print(now.minute());
+        solarfijo.print(':');
+        solarfijo.println(now.second());
+
+        // Escribir datos del INA226
+        solarfijo.print("INA226: | Shunt Voltage [mV]: ");
+        solarfijo.print(shuntVoltage_mV);
+        solarfijo.print(" | Bus Voltage [V]: ");
+        solarfijo.print(busVoltage_V);
+        solarfijo.print(" | Load Voltage [V]: ");
+        solarfijo.print(loadVoltage_V);
+        solarfijo.print(" | Current[mA]: ");
+        solarfijo.println(current_mA);
+
+        solarfijo.flush();
+        solarfijo.close();
     }
     else
     {
-        Serial.println("Error al abrir el archivo");
+        Serial.println("Error al escribir en la SD");
     }
 
-    delay(500);
+    delay(3000);
 }
 
 // ! End of code.

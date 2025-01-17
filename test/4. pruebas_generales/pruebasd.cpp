@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <SD.h>
 
+#include <Adafruit_I2CDevice.h>
+
 File logFile;
 
 void setup()

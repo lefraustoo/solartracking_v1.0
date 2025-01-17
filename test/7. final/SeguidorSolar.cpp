@@ -11,6 +11,8 @@
 #include <RTClib.h> // Librería para controlar el módulo RTC
 #include <SPI.h>    // Librería para comunicación SPI
 
+///////////////////////////////////   SERVOS   ////////////////////////////////////
+
 void ServoMovement();
 
 #define SERVOPINH 5 // horizontal servo
@@ -24,7 +26,7 @@ int servohLimitLow = 0;    // The minimum angle of rotation in the horizontal di
 
 // Vertical Servo Settings
 Servo vertical;            // vertical servo
-int servov = 95;           // Initialize angle
+int servov = 90;           // Initialize angle
 int servovLimitHigh = 270; // The maximum angle of rotation in the vertical direction
 int servovLimitLow = 0;    // The minimum angle of rotation in the vertical direction
 
@@ -32,8 +34,8 @@ int servovLimitLow = 0;    // The minimum angle of rotation in the vertical dire
 int tol = 100; // The response range of illuminance, the smaller the value, the more sensitive the response, otherwise it is slow
                //(the value is 10~100, the sensitivity is different depending on the ambient light intensity, the indoor light source changes greatly, and the change is smaller under the sun)
 
-int dtime = 100; // delay parameter. The smaller the value, the faster the response speed.
-                 // On the contrary, the larger the value, the slower the response speed. Unit: milliseconds General value (10~100)
+int dtime = 50; // delay parameter. The smaller the value, the faster the response speed.
+                // On the contrary, the larger the value, the slower the response speed. Unit: milliseconds General value (10~100)
 
 // 4 connection ports for photoresistor modules
 const int ldrlt = A0; // top left
@@ -89,6 +91,7 @@ void setup()
     // !! initial servo settings
     horizontal.attach(SERVOPINH);
     vertical.attach(SERVOPINV);
+
     horizontal.write(servoh);
     vertical.write(servov);
 
@@ -146,27 +149,26 @@ void setup()
 
     // ina226.waitUntilConversionCompleted(); // ? if you comment this line the first data might be zero
 
-    // !! initial MPU6050 settings
-
     // !! initial SD settings
     Serial.print(F("Iniciando SD ..."));
 
-    // Inicialización de la SD
     if (!SD.begin(10))
     {
         Serial.println("Error al inicializar la SD.");
         return;
     }
 
-    // Abrir el archivo una vez
     SeguidorSolar = SD.open("datas.txt", FILE_WRITE);
+
     if (!SeguidorSolar)
     {
-        Serial.println("Error al abrir el archivo datas.txt");
+        Serial.println("Error al abrir el archivo dataf.txt");
         return;
     }
 
     Serial.println(F("Iniciado correctamente"));
+
+    // !! initial RTC settings
 
     // Comprobamos si tenemos el RTC conectado
     if (!rtc.begin())
@@ -176,15 +178,16 @@ void setup()
             ;
     }
 
-    // Ponemos en hora, solo la primera vez, luego comentar y volver a cargar.
-    // Ponemos en hora con los valores de la fecha y la hora en que el sketch ha sido compilado.
-    // rtc.adjust(DateTime(2025, 1, 14, 16, 10, 10));
+    // rtc.adjust(DateTime(2025, 1, 14, 16, 10, 10)); // Ponemos en hora, solo la primera vez, luego comentar y volver a cargar.
+
+    // !! initial MPU6050 settings
 }
 
 ///////////////////////////////////   LOOP   ////////////////////////////////////
 void loop()
 {
-    guardadoSD();
+    ServoMovement();
+    // guardadoSD();
 }
 
 ///////////////////////////////////   FUNCTIONS   ////////////////////////////////////
@@ -265,7 +268,9 @@ void ServoMovement()
         horizontal.write(servoh); // If the rotation angle of the servo is opposite to the light, use (180- servoh) or (servoh) to change the direction
     }
 
-    // delay(dtime);
+    delay(dtime);
+    // delay(50);
+    // guardadoSD();
 }
 
 void INA226multimeter()
@@ -298,7 +303,7 @@ void guardadoSD()
 
     if (SeguidorSolar)
     {
-        ServoMovement();
+        // ServoMovement();
         INA226multimeter();
 
         DateTime now = rtc.now();

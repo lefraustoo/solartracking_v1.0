@@ -36,6 +36,8 @@
 #include "I2Cdev.h"  // Se coloca con "" para que busque en la carpeta del proyecto
 #include "MPU6050.h"
 #include "Wire.h"
+#include <Adafruit_I2CDevice.h>
+#include <SPI.h>
 
 ///////////////////////////////////   CONFIGURATION   /////////////////////////////
 // Change this 3 variables if you want to fine tune the skecth to your needs.
@@ -48,7 +50,7 @@ int giro_deadzone = 1; // Giro error allowed, make it lower to get more precisio
 // AD0 low = 0x68 (default for InvenSense evaluation board)
 // AD0 high = 0x69
 // MPU6050 accelgyro;
-MPU6050 accelgyro(0x68); // <-- use for AD0 high
+MPU6050 accelgyro(0x69); // <-- use for AD0 high
 int16_t ax, ay, az, gx, gy, gz;
 
 int mean_ax, mean_ay, mean_az, mean_gx, mean_gy, mean_gz, state = 0;
