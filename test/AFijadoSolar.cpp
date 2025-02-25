@@ -55,7 +55,8 @@ void setup()
         while (1)
             ;
     }
-    // rtc.adjust(DateTime(2025, 1, 14, 16, 10, 10)); // Solo la primera vez (comentar y volver a cargar)
+
+    // rtc.adjust(DateTime(2025, 1, 17, 11, 11, 30)); // Solo la primera vez (comentar y volver a cargar)
 }
 
 void loop()
@@ -105,7 +106,7 @@ void INA226multimeter()
     Serial.print(F(" | Load Voltage [V]: "));
     Serial.print(loadVoltage_V);
     Serial.print(F(" | Current [mA]: "));
-    Serial.println(current_mA);
+    Serial.println(-current_mA);
 
     if (!ina226.overflow)
     {

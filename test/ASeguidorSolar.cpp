@@ -48,7 +48,7 @@ RTC_DS3231 rtc;
 
 Adafruit_ADS1115 ads;
 const float multiplier = 0.1875F;
-const float sensitivity = 500.0;
+const float sensitivity = 50.0;
 
 MPU6050 sensorv(0x69);
 int16_t axv, ayv, azv;
@@ -197,6 +197,7 @@ void ServoMovement()
 
     // Pausa para permitir que los servos se muevan antes de tomar nuevas lecturas
     delay(dtime);
+    // delay(5000);
 }
 
 void INA226multimeter()
@@ -216,7 +217,7 @@ void INA226multimeter()
     Serial.print(F(", Load Voltage [V]: "));
     Serial.print(loadVoltage_V);
     Serial.print(F(", Current [mA]: "));
-    Serial.print(current_mA);
+    Serial.print((-1) * (current_mA));
     Serial.println();
 
     // if (!ina226.overflow)
@@ -233,7 +234,7 @@ void Radiacion()
 {
     int16_t results = ads.readADC_Differential_0_1();
     float voltage_mV = -(results * multiplier);
-    float irradiance = voltage_mV / (sensitivity / 1000.0);
+    float irradiance = voltage_mV / (sensitivity / 500.0);
 
     Serial.print(F("Piranometro.- Voltaje [mV]: "));
     Serial.print(voltage_mV);
