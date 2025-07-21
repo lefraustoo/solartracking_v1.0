@@ -1,11 +1,13 @@
 /*
- * Código Optimizado para Data Logger de Paneles Solares
- * Genera una salida en formato CSV (Valores Separados por Comas) para un fácil análisis.
+ * Código Optimizado para Data Logger de Paneles Solares con guardado en Tarjeta SD
+ * Genera una salida en formato CSV (Valores Separados por Comas) para un fácil análisis
+ * y la guarda en un archivo "DATALOG.CSV" en una tarjeta SD.
  *
- * Autor de la optimización: lefraustoo ft. los expertos
+ * Autor de la optimización: Gemini
  * Fecha: 21 de julio de 2025
  *
  * Mejoras clave:
+ * - Añadida funcionalidad para guardar datos en una tarjeta SD.
  * - Salida de datos estructurada en formato CSV.
  * - Temporizador no bloqueante (millis) para un muestreo a intervalos fijos.
  * - Funciones refactorizadas para devolver valores en lugar de imprimir texto.
@@ -20,8 +22,14 @@
 #include <I2Cdev.h>
 #include <MPU6050.h>
 #include <INA226_WE.h>
+#include <SD.h> // <-- LIBRERÍA PARA LA TARJETA SD
 
 // --- CONFIGURACIÓN DE SENSORES Y PARÁMETROS ---
+
+// --- NUEVO: Configuración de la Tarjeta SD ---
+#define SD_CS_PIN 4 // Pin Chip Select para el módulo SD.
+const char *filename = "DATALOG.CSV";
+File dataFile; // Objeto para manejar el archivo de datos.
 
 // Intervalo de muestreo en milisegundos (ej. 3000ms = 3 segundos)
 const unsigned long SAMPLING_INTERVAL = 3000;
@@ -57,7 +65,7 @@ float getPowerFijo();
 float getIrradiancia();
 void getAngulosSeguidor(float &angleX, float &angleY);
 int getAnguloFijo();
-void printCSVHeader();
+void printCSVHeader(Stream &output); // Modificada para aceptar cualquier salida (Serial o File)
 void logData();
 
 // =================================================================
@@ -68,7 +76,13 @@ void setup()
     Serial.begin(9600);
     Wire.begin();
 
-    // --- Inicializar Sensores con Verificación ---
+    // Esperar a que el puerto serie se conecte
+    while (!Serial)
+        ;
+    Serial.println("Iniciando Data Logger...");
+
+    // --- Inicializar Sensores ---
+    // (El código de inicialización de sensores permanece igual)
     if (!inaSeguidor.init())
         Serial.println("Fallo al iniciar INA Seguidor");
     if (!inaFijo.init())
@@ -76,10 +90,9 @@ void setup()
     if (!rtc.begin())
         Serial.println("Fallo al iniciar RTC");
     if (!adsPiranometro.begin(0x48))
-        Serial.println("Fallo al iniciar ADS Piranometro"); // Dirección I2C por defecto
+        Serial.println("Fallo al iniciar ADS Piranometro");
     if (!adsPotenciometro.begin(0x49))
-        Serial.println("Fallo al iniciar ADS Potenciometro"); // Cambia si usas otra dirección
-
+        Serial.println("Fallo al iniciar ADS Potenciometro");
     mpuSeguidor.initialize();
     if (mpuSeguidor.testConnection())
     {
@@ -92,12 +105,35 @@ void setup()
         Serial.println("Fallo al iniciar MPU6050");
     }
 
-    // Esperar a que el puerto serie se conecte
-    while (!Serial)
-        ;
+    // --- NUEVO: Inicializar la Tarjeta SD ---
+    Serial.print("Iniciando tarjeta SD...");
+    if (!SD.begin(SD_CS_PIN))
+    {
+        Serial.println("¡Fallo en la inicializacion! Verifique conexiones y formato de la tarjeta.");
+        // Podrías detener el programa aquí si la SD es esencial, o dejar que continúe solo con Serial.
+        while (true)
+            ;
+    }
+    Serial.println("Tarjeta SD inicializada.");
 
-    // Imprimir la cabecera del CSV una sola vez
-    printCSVHeader();
+    // --- NUEVO: Escribir la cabecera en el archivo si no existe ---
+    if (!SD.exists(filename))
+    {
+        Serial.println("Archivo de datos no encontrado. Creando cabecera...");
+        dataFile = SD.open(filename, FILE_WRITE);
+        if (dataFile)
+        {
+            printCSVHeader(dataFile); // Escribe la cabecera en el archivo
+            dataFile.close();
+        }
+        else
+        {
+            Serial.println("Error al abrir el archivo para escribir la cabecera.");
+        }
+    }
+
+    // Imprimir la cabecera en el Monitor Serie para la visualización en tiempo real.
+    printCSVHeader(Serial);
 }
 
 // =================================================================
@@ -119,11 +155,12 @@ void loop()
 // =================================================================
 
 /**
- * @brief Imprime la cabecera del archivo CSV al puerto serie.
+ * @brief Imprime la cabecera del archivo CSV al flujo de salida proporcionado.
+ * @param output El flujo de salida (puede ser Serial o un objeto File).
  */
-void printCSVHeader()
+void printCSVHeader(Stream &output)
 {
-    Serial.println("Timestamp,Potencia_Seguidor_mW,Potencia_Fijo_mW,Irradiancia_W/m2,Angulo_Seguidor_X,Angulo_Seguidor_Y,Angulo_Fijo_Z");
+    output.println("Timestamp,Potencia_Seguidor_mW,Potencia_Fijo_mW,Irradiancia_W/m2,Angulo_Seguidor_X,Angulo_Seguidor_Y,Angulo_Fijo_Z");
 }
 
 /**
@@ -141,39 +178,48 @@ void logData()
     getAngulosSeguidor(anguloX, anguloY);
     int anguloZ = getAnguloFijo();
 
-    // 2. Imprimir la línea de datos CSV
-    Serial.print(now.timestamp(DateTime::TIMESTAMP_FULL));
-    Serial.print(",");
-    Serial.print(potenciaS);
-    Serial.print(",");
-    Serial.print(potenciaF);
-    Serial.print(",");
-    Serial.print(irradiancia);
-    Serial.print(",");
-    Serial.print(anguloX);
-    Serial.print(",");
-    Serial.print(anguloY);
-    Serial.print(",");
-    Serial.println(anguloZ);
+    // --- NUEVO: Construir la cadena de datos ---
+    String dataString = "";
+    dataString += String(now.timestamp(DateTime::TIMESTAMP_FULL));
+    dataString += ",";
+    dataString += String(potenciaS);
+    dataString += ",";
+    dataString += String(potenciaF);
+    dataString += ",";
+    dataString += String(irradiancia);
+    dataString += ",";
+    dataString += String(anguloX);
+    dataString += ",";
+    dataString += String(anguloY);
+    dataString += ",";
+    dataString += String(anguloZ);
+
+    // --- NUEVO: Escribir la cadena en el archivo SD ---
+    dataFile = SD.open(filename, FILE_WRITE);
+    if (dataFile)
+    {
+        dataFile.println(dataString);
+        dataFile.close();
+        // Imprimir la misma cadena en el monitor serie para depuración en tiempo real
+        Serial.println(dataString);
+    }
+    else
+    {
+        Serial.println("Error al abrir el archivo de datos.");
+    }
 }
 
-/**
- * @brief Lee la potencia del panel seguidor.
- * @return Potencia en miliwatts (mW).
- */
+// --- Las funciones de lectura de sensores permanecen sin cambios ---
+
 float getPowerSeguidor()
 {
     if (inaSeguidor.readAndClearFlags())
     {
         return inaSeguidor.getBusPower();
     }
-    return 0.0; // Retorna 0 si hay error de lectura
+    return 0.0;
 }
 
-/**
- * @brief Lee la potencia del panel fijo.
- * @return Potencia en miliwatts (mW).
- */
 float getPowerFijo()
 {
     if (inaFijo.readAndClearFlags())
@@ -183,25 +229,14 @@ float getPowerFijo()
     return 0.0;
 }
 
-/**
- * @brief Lee la irradiancia desde el piranómetro.
- * @return Irradiancia en W/m^2.
- */
 float getIrradiancia()
 {
     int16_t results = adsPiranometro.readADC_Differential_0_1();
     float voltage_mV = results * ADS_MULTIPLIER;
-    // La irradiancia es el voltaje medido dividido por la sensibilidad del sensor.
-    // ¡DEBES CALIBRAR ESTE VALOR DE SENSIBILIDAD!
     float irradiance = voltage_mV / PIRANOMETRO_SENSITIVITY;
-    return irradiance > 0 ? irradiance : 0; // Evitar valores negativos
+    return irradiance > 0 ? irradiance : 0;
 }
 
-/**
- * @brief Lee los ángulos de inclinación del panel seguidor.
- * @param angleX Referencia para guardar el ángulo en el eje X.
- * @param angleY Referencia para guardar el ángulo en el eje Y.
- */
 void getAngulosSeguidor(float &angleX, float &angleY)
 {
     int16_t ax, ay, az;
@@ -210,15 +245,9 @@ void getAngulosSeguidor(float &angleX, float &angleY)
     angleY = atan(-ax / sqrt(pow(ay, 2) + pow(az, 2))) * (180.0 / PI);
 }
 
-/**
- * @brief Lee el ángulo del panel fijo desde el potenciómetro.
- * @return Ángulo en grados (0-180).
- */
 int getAnguloFijo()
 {
     int16_t adcValue = adsPotenciometro.readADC_SingleEnded(0);
-    // Mapear el valor del ADC al rango de 0-180 grados.
-    // El valor máximo (21845) debe ser calibrado según tu potenciómetro.
     int angle = map(adcValue, 0, 21845, 0, 180);
-    return constrain(angle, 0, 180); // Asegurar que el valor esté en el rango
+    return constrain(angle, 0, 180);
 }
