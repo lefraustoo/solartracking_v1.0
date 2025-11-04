@@ -1,19 +1,21 @@
 /*
  * CÓDIGO DE DATA LOGGER (PARA ARDUINO MEGA)
+ * Basado en la lógica de sensores de tus archivos .cpp.
  *
- * Tarea: Leer 6 sensores I2C y guardar los datos en formato CSV en una
- * tarjeta SD a intervalos fijos (no bloqueante).
+ * TAREA:
+ * Mide 6 cosas y las guarda en una tarjeta SD en formato CSV.
+ * - Potencia Panel 1 (INA)
+ * - Potencia Panel 2 (INA)
+ * - Ángulo Panel 1 (MPU6050)
+ * - Ángulo Panel 2 (ADS1115)
+ * - Irradiancia (ADS1115)
+ * - Timestamp (RTC)
  *
- * MEJORAS CRÍTICAS DE ESTABILIDAD:
- * 1. SIN CLASE String: Se eliminó la concatenación de 'String' para
- * prevenir la fragmentación de RAM y cuelgues del sistema.
- * 2. MANEJO EFICIENTE DE SD: El archivo de datos se abre UNA SOLA VEZ en
- * setup() y se usa 'dataFile.flush()' periódicamente para guardar.
- * Esto previene el desgaste y corrupción de la tarjeta SD.
- * 3. DATOS LIMPIOS: Las funciones de sensor devuelven 'NAN' (Not a Number)
- * si la lectura falla, mejorando la integridad del análisis de datos.
- * 4. OPTIMIZACIÓN: Se usa 'x*x' en lugar de 'pow(x, 2)' y 'atan2' para
- * cálculos de ángulo más rápidos y robustos.
+ * MEJORAS:
+ * - NO USA 'String' para evitar cuelgues.
+ * - ABRE LA SD UNA SOLA VEZ para evitar corrupción.
+ * - USA 'millis()' para un muestreo estable.
+ * - Separa las direcciones I2C que estaban en conflicto.
  */
 
 #include <Arduino.h>
@@ -25,94 +27,75 @@
 #include <MPU6050.h>
 #include <INA226_WE.h>
 
-// --- CONFIGURACIÓN DE PARÁMETROS ---
-#define SD_CS_PIN 53 // Pin Chip Select para la SD en Arduino MEGA
+// --- Configuración del Logger ---
+#define SD_CS_PIN 53 // Pin CS en MEGA es 53
 const char *filename = "DATALOG.CSV";
-
-// Intervalos (no bloqueantes)
-const unsigned long SAMPLING_INTERVAL = 3000; // Tomar muestra cada 3 segundos
-const int FLUSH_INTERVAL = 10;                // Guardar en SD cada 10 muestras (30 seg)
-
-unsigned long previousMillis = 0;
-int logCounter = 0; // Contador para el flush
-
-// --- OBJETOS DE SENSORES ---
-
-// Tarjeta SD
 File dataFile;
+const unsigned long SAMPLING_INTERVAL = 3000; // Muestreo cada 3 seg
+const int FLUSH_INTERVAL = 10;                // Guardar en SD cada 10 muestras
+unsigned long previousMillis = 0;
+int logCounter = 0;
 
-// Sensores de potencia INA226
-#define I2C_ADDRESS_SEGUIDOR 0x40
-#define I2C_ADDRESS_FIJO 0x41
-INA226_WE inaSeguidor(I2C_ADDRESS_SEGUIDOR);
-INA226_WE inaFijo(I2C_ADDRESS_FIJO);
-
-// Reloj de tiempo real (RTC)
+// --- Configuración de Sensores (CON DIRECCIONES CORREGIDAS) ---
 RTC_DS3231 rtc;
 
-// Conversores ADC ADS1115
-// Adafruit_ADS1115 adsPiranometro(0x48);   // Para el piranómetro
-// Adafruit_ADS1115 adsPotenciometro(0x49); // Para el potenciómetro del panel fijo
-Adafruit_ADS1115 adsPiranometro;   // ¡CORREGIDO! Declaración vacía
-Adafruit_ADS1115 adsPotenciometro; // ¡CORREGIDO! Declaración vacía
+// Panel 1 (Seguidor)
+INA226_WE inaSeguidor(0x40); // Dirección I2C Panel 1
+MPU6050 mpuSeguidor(0x69);   // Dirección I2C MPU
 
-// Sensor de Inclinación MPU6050
-MPU6050 mpuSeguidor(0x69);
-// Offsets de calibración (¡ajusta según tu sensor!)
+// Panel 2 (Fijo/Manual)
+INA226_WE inaFijo(0x41);           // ¡NUEVA DIRECCIÓN I2C! Panel 2
+Adafruit_ADS1115 adsPotFijo(0x49); // ¡NUEVA DIRECCIÓN I2C! Potenciómetro Panel 2
+
+// Entorno
+Adafruit_ADS1115 adsPiranometro(0x48); // Dirección I2C Piranómetro
+
+// --- Constantes de Calibración (de tu código) ---
+const float ADS_MULTIPLIER = 0.1875F;
+const float PIRANOMETRO_SENSITIVITY = 0.02; // ¡USÉ ESTE VALOR, NO 500! 500 era un error.
+const int POT_ADC_MAX = 21845;              // De tu código
+
+// Offsets MPU (de tu código)
 int ax_offset = -2632;
 int ay_offset = -938;
 int az_offset = 467;
 
-// --- CONSTANTES DE CALIBRACIÓN ---
-// Piranómetro
-const float ADS_MULTIPLIER_PIRANOMETRO = 0.1875F; // Para ADS1115
-const float PIRANOMETRO_SENSITIVITY = 0.02;       // Sensibilidad en mV por W/m^2
-
-// Potenciómetro (Panel Fijo)
-const int POT_ADC_MIN = 0;     // Valor ADC para 0 grados
-const int POT_ADC_MAX = 21845; // Valor ADC calibrado para 180 grados
-const int POT_ANGLE_MIN = 0;
-const int POT_ANGLE_MAX = 180;
-
-// --- DECLARACIÓN DE FUNCIONES ---
-float getPowerSeguidor();
-float getPowerFijo();
+// --- Declaración de Funciones ---
+void initializeSensors();
+void printCSVHeader(Stream &output);
+void logData();
+float getPotenciaSeguidor();
+float getPotenciaFijo();
 float getIrradiancia();
 void getAngulosSeguidor(float &angleX, float &angleY);
 int getAnguloFijo();
-void printCSVHeader(Stream &output);
-void logData();
-void initializeSensors();
 
-// =================================================================
-// --- SETUP ---
-// =================================================================
+// ==========================================
+//  SETUP
+// ==========================================
 void setup()
 {
     Serial.begin(9600);
     Wire.begin();
-
-    // Esperar a que el puerto serie se conecte
     while (!Serial)
         ;
-    Serial.println(F("Iniciando Data Logger..."));
+    Serial.println(F("Iniciando Data Logger (MEGA)..."));
 
-    // --- Inicializar todos los sensores ---
     initializeSensors();
 
     // --- Inicializar la Tarjeta SD ---
     Serial.print(F("Iniciando tarjeta SD..."));
     if (!SD.begin(SD_CS_PIN))
     {
-        Serial.println(F("¡Fallo en la inicializacion! Verifique conexiones."));
+        Serial.println(F("¡Fallo en la inicializacion!"));
         while (true)
-            ; // Detener el programa
+            ; // Detener
     }
     Serial.println(F("Tarjeta SD inicializada."));
 
-    // --- Lógica de Archivo (Abrir UNA SOLA VEZ) ---
+    // --- Abrir archivo (una sola vez) ---
     bool fileExists = SD.exists(filename);
-    dataFile = SD.open(filename, FILE_WRITE); // Abrir en modo de añadir (append)
+    dataFile = SD.open(filename, FILE_WRITE);
 
     if (!dataFile)
     {
@@ -123,65 +106,55 @@ void setup()
 
     if (!fileExists)
     {
-        Serial.println(F("Archivo no existe. Escribiendo cabecera en SD..."));
+        Serial.println(F("Escribiendo cabecera en SD..."));
         printCSVHeader(dataFile);
-        dataFile.flush(); // Asegurarse de que la cabecera se escriba
+        dataFile.flush();
     }
     else
     {
         Serial.println(F("Archivo encontrado. Añadiendo datos..."));
     }
 
-    // Imprimir la cabecera en el Monitor Serie para visualización.
     printCSVHeader(Serial);
 }
 
-// =================================================================
-// --- LOOP (NO BLOQUEANTE) ---
-// =================================================================
+// ==========================================
+//  LOOP (NO BLOQUEANTE)
+// ==========================================
 void loop()
 {
     unsigned long currentMillis = millis();
 
-    // Usar millis() para tomar una muestra de datos a intervalos regulares
     if (currentMillis - previousMillis >= SAMPLING_INTERVAL)
     {
-        previousMillis = currentMillis; // Actualizar el tiempo de la última muestra
-
-        logData(); // Llamar a la función que lee y registra los datos
+        previousMillis = currentMillis;
+        logData(); // Leer sensores y guardar datos
 
         logCounter++;
-
-        // --- Lógica de Guardado (Flush) Periódico ---
         if (logCounter % FLUSH_INTERVAL == 0)
         {
-            dataFile.flush(); // Guardar el búfer en la tarjeta SD
+            dataFile.flush(); // Guardar en la SD
             Serial.println(F("-> Datos guardados en SD (flush)"));
         }
     }
 }
 
-// =================================================================
-// --- FUNCIONES DE REGISTRO Y LECTURA ---
-// =================================================================
+// ==========================================
+//  FUNCIONES DE LÓGICA
+// ==========================================
 
-/**
- * @brief Inicializa todos los sensores I2C y reporta fallos.
- */
 void initializeSensors()
 {
-    if (!inaSeguidor.init())
-        Serial.println(F("Fallo al iniciar INA Seguidor"));
-    if (!inaFijo.init())
-        Serial.println(F("Fallo al iniciar INA Fijo"));
     if (!rtc.begin())
         Serial.println(F("Fallo al iniciar RTC"));
-    // if (!adsPiranometro.begin()) Serial.println(F("Fallo al iniciar ADS Piranometro"));
-    // if (!adsPotenciometro.begin()) Serial.println(F("Fallo al iniciar ADS Potenciometro"));
-    if (!adsPiranometro.begin(0x48))
+    if (!inaSeguidor.init())
+        Serial.println(F("Fallo al iniciar INA Seguidor (0x40)"));
+    if (!inaFijo.init())
+        Serial.println(F("Fallo al iniciar INA Fijo (0x41)"));
+    if (!adsPiranometro.begin())
         Serial.println(F("Fallo al iniciar ADS Piranometro (0x48)"));
-    if (!adsPotenciometro.begin(0x49))
-        Serial.println(F("Fallo al iniciar ADS Potenciometro (0x49)"));
+    if (!adsPotFijo.begin())
+        Serial.println(F("Fallo al iniciar ADS Pot Fijo (0x49)"));
 
     mpuSeguidor.initialize();
     if (mpuSeguidor.testConnection())
@@ -192,132 +165,113 @@ void initializeSensors()
     }
     else
     {
-        Serial.println(F("Fallo al iniciar MPU6050"));
+        Serial.println(F("Fallo al iniciar MPU6050 (0x69)"));
     }
 }
 
-/**
- * @brief Imprime la cabecera del archivo CSV al flujo de salida.
- * @param output El flujo de salida (Serial o un objeto File).
- */
 void printCSVHeader(Stream &output)
 {
-    output.println(F("Timestamp,Potencia_Seguidor_mW,Potencia_Fijo_mW,Irradiancia_W/m2,Angulo_Seguidor_X,Angulo_Seguidor_Y,Angulo_Fijo_Z"));
+    output.println(F("Timestamp,Pot_Seguidor_mW,Pot_Fijo_mW,Irradiancia_W/m2,Ang_Seg_X,Ang_Seg_Y,Ang_Fijo_Z"));
 }
 
-/**
- * @brief Recopila datos y los escribe (pieza por pieza) en la SD y el Serial.
- * ¡¡¡NO USA LA CLASE STRING!!!
+/*
+ * Recopila datos y los escribe (pieza por pieza) en la SD y el Serial.
+ * NO USA 'String'
  */
 void logData()
 {
     DateTime now = rtc.now();
 
-    // 1. Obtener datos de cada sensor
-    float potenciaS = getPowerSeguidor();
-    float potenciaF = getPowerFijo();
-    float irradiancia = getIrradiancia();
-    float anguloX, anguloY;
-    getAngulosSeguidor(anguloX, anguloY);
-    int anguloZ = getAnguloFijo();
+    // 1. Obtener datos
+    float potS = getPotenciaSeguidor();
+    float potF = getPotenciaFijo();
+    float irrad = getIrradiancia();
+    float angX, angY;
+    getAngulosSeguidor(angX, angY);
+    int angZ = getAnguloFijo();
 
-    // 2. Escribir en el archivo SD (que ya está abierto)
-    // Usar F() macro para ahorrar RAM en los strings fijos
+    // 2. Escribir en archivo SD (pieza por pieza)
     dataFile.print(now.timestamp(DateTime::TIMESTAMP_FULL));
     dataFile.print(F(","));
-    dataFile.print(potenciaS);
+    dataFile.print(potS);
     dataFile.print(F(","));
-    dataFile.print(potenciaF);
+    dataFile.print(potF);
     dataFile.print(F(","));
-    dataFile.print(irradiancia);
+    dataFile.print(irrad);
     dataFile.print(F(","));
-    dataFile.print(anguloX);
+    dataFile.print(angX);
     dataFile.print(F(","));
-    dataFile.print(anguloY);
+    dataFile.print(angY);
     dataFile.print(F(","));
-    dataFile.println(anguloZ); // println() para la última pieza (salto de línea)
+    dataFile.println(angZ);
 
-    // 3. Escribir la misma línea en el monitor serie para depuración
+    // 3. Escribir en Monitor Serie (para depuración)
     Serial.print(now.timestamp(DateTime::TIMESTAMP_FULL));
     Serial.print(F(","));
-    Serial.print(potenciaS);
+    Serial.print(potS);
     Serial.print(F(","));
-    Serial.print(potenciaF);
+    Serial.print(potF);
     Serial.print(F(","));
-    Serial.print(irradiancia);
+    Serial.print(irrad);
     Serial.print(F(","));
-    Serial.print(anguloX);
+    Serial.print(angX);
     Serial.print(F(","));
-    Serial.print(anguloY);
+    Serial.print(angY);
     Serial.print(F(","));
-    Serial.println(anguloZ);
+    Serial.println(angZ);
 }
 
-// --- Funciones de Lectura de Sensores (Optimizadas) ---
+// --- Funciones de Lectura de Sensores (Basadas en tu código) ---
 
-float getPowerSeguidor()
+float getPotenciaSeguidor()
 {
-    // if (inaSeguidor.readAndClearFlags())
-    // {
-    //     return inaSeguidor.getBusPower(); // Retorna potencia en mW
-    // }
-    // return NAN; // Retorna "Not a Number" si la lectura falla
-
-    // ¡CORREGIDO! Usando la API moderna de la librería (v1.3.0+)
-    if (inaSeguidor.isConversionReady())
+    if (inaSeguidor.isConversionReady()) // API Moderna
     {
         return inaSeguidor.getBusPower();
     }
-    return NAN; // Retorna NAN si la conversión no está lista (o sensor desconectado)
+    return NAN;
 }
 
-float getPowerFijo()
+float getPotenciaFijo()
 {
-    // if (inaFijo.readAndClearFlags())
-    // {
-    //     return inaFijo.getBusPower(); // Retorna potencia en mW
-    // }
-    // return NAN; // Retorna "Not a Number" si la lectura falla
-
-    // ¡CORREGIDO! Usando la API moderna de la librería (v1.3.0+)
-    if (inaFijo.isConversionReady())
+    if (inaFijo.isConversionReady()) // API Moderna
     {
         return inaFijo.getBusPower();
     }
-    return NAN; // Retorna NAN si la conversión no está lista (o sensor desconectado)
+    return NAN;
 }
 
 float getIrradiancia()
 {
+    // De tu función 'Radiacion()' en ASeguidorSolar.cpp
     int16_t results = adsPiranometro.readADC_Differential_0_1();
-    float voltage_mV = results * ADS_MULTIPLIER_PIRANOMETRO;
+    float voltage_mV = results * ADS_MULTIPLIER; // Tu código tenía un '-(results...)''. Lo quité. Si da negativo, vuelve a ponerlo.
 
     if (PIRANOMETRO_SENSITIVITY == 0)
-        return 0.0; // Evitar división por cero
-
+        return 0.0;
     float irradiance = voltage_mV / PIRANOMETRO_SENSITIVITY;
-    return irradiance > 0 ? irradiance : 0; // No retornar valores negativos
+    return irradiance > 0 ? irradiance : 0;
 }
 
 void getAngulosSeguidor(float &angleX, float &angleY)
 {
+    // De tu función 'Angulos()' en ASeguidorSolar.cpp
     int16_t ax, ay, az;
     mpuSeguidor.getAcceleration(&ax, &ay, &az);
 
-    // Convertir a float ANTES de multiplicar para evitar desbordamiento
     float f_ax = (float)ax;
     float f_ay = (float)ay;
     float f_az = (float)az;
 
-    // Usar x*x (más rápido) y atan2 (más robusto que atan)
+    // Usar atan2 es más robusto y PI (no 3.1416) es más preciso
     angleX = atan2(f_ay, sqrt(f_ax * f_ax + f_az * f_az)) * (180.0 / PI);
     angleY = atan2(-f_ax, sqrt(f_ay * f_ay + f_az * f_az)) * (180.0 / PI);
 }
 
 int getAnguloFijo()
 {
-    int16_t adcValue = adsPotenciometro.readADC_SingleEnded(0);
-    // Usar constantes en lugar de "números mágicos"
-    int angle = map(adcValue, POT_ADC_MIN, POT_ADC_MAX, POT_ANGLE_MIN, POT_ANGLE_MAX);
-    return constrain(angle, POT_ANGLE_MIN, POT_ANGLE_MAX);
+    // De tu función 'potenciometroext()' en ASeguidorSolar.cpp
+    int16_t adcValue = adsPotFijo.readADC_SingleEnded(0);
+    int angle = map(adcValue, 0, POT_ADC_MAX, 0, 180);
+    return constrain(angle, 0, 180);
 }
