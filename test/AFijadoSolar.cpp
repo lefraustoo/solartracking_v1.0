@@ -32,6 +32,11 @@ const unsigned long INAInterval = 3000;
 void ServoMovement();
 void INA226multimeter();
 
+/**
+ * @brief Initializes the system.
+ *
+ * This function sets up the serial communication, servos, sensors, and other components.
+ */
 void setup()
 {
     Serial.begin(9600);
@@ -58,6 +63,11 @@ void setup()
     // rtc.adjust(DateTime(2025, 1, 14, 16, 10, 10)); // Solo la primera vez (comentar y volver a cargar)
 }
 
+/**
+ * @brief Main loop of the program.
+ *
+ * This function continuously reads sensor data, moves the servos, and sends data over serial.
+ */
 void loop()
 {
 
@@ -70,6 +80,11 @@ void loop()
     INA226multimeter();
 }
 
+/**
+ * @brief Moves the servos based on potentiometer readings.
+ *
+ * This function reads the values from the potentiometers, maps them to angles, and moves the horizontal and vertical servos.
+ */
 void ServoMovement()
 {
     potValueH = analogRead(POTPINH);
@@ -88,6 +103,11 @@ void ServoMovement()
     Serial.println(F("°"));
 }
 
+/**
+ * @brief Reads and prints data from the INA226 power monitor.
+ *
+ * This function reads the shunt voltage, bus voltage, current, and power from the INA226 sensor and prints the values to the serial monitor.
+ */
 void INA226multimeter()
 {
     ina226.readAndClearFlags();

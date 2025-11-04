@@ -73,6 +73,11 @@ void Radiacion();
 void Angulos();
 void potenciometroext();
 
+/**
+ * @brief Initializes the system.
+ *
+ * This function sets up the serial communication, servos, sensors, and other components.
+ */
 void setup()
 {
     Serial.begin(9600);
@@ -127,6 +132,11 @@ void setup()
     }
 }
 
+/**
+ * @brief Main loop of the program.
+ *
+ * This function continuously reads sensor data, moves the servos, and sends data over serial.
+ */
 void loop()
 {
     DateTime now = rtc.now();
@@ -140,6 +150,11 @@ void loop()
     potenciometroext();
 }
 
+/**
+ * @brief Moves the servos based on LDR sensor readings.
+ *
+ * This function reads the values from the LDR sensors, calculates the average values, and moves the horizontal and vertical servos to track the light source.
+ */
 void ServoMovement()
 {
     for (int i = 0; i < 4; i++)
@@ -199,6 +214,11 @@ void ServoMovement()
     delay(dtime);
 }
 
+/**
+ * @brief Reads and prints data from the INA226 power monitor.
+ *
+ * This function reads the shunt voltage, bus voltage, current, and power from the INA226 sensor and prints the values to the serial monitor.
+ */
 void INA226multimeter()
 {
     ina226.readAndClearFlags();
@@ -229,6 +249,11 @@ void INA226multimeter()
     // }
 }
 
+/**
+ * @brief Reads and calculates the solar irradiance.
+ *
+ * This function reads the voltage from the pyranometer, calculates the irradiance, and prints the values to the serial monitor.
+ */
 void Radiacion()
 {
     int16_t results = ads.readADC_Differential_0_1();
@@ -242,6 +267,11 @@ void Radiacion()
     Serial.println();
 }
 
+/**
+ * @brief Reads and calculates the inclination angles.
+ *
+ * This function reads the accelerometer data from the MPU6050 sensor, calculates the inclination angles, and prints the values to the serial monitor.
+ */
 void Angulos()
 {
     sensorv.getAcceleration(&axv, &ayv, &azv);
@@ -256,6 +286,11 @@ void Angulos()
     Serial.print(F("°, "));
 }
 
+/**
+ * @brief Reads the value from the external potentiometer and calculates the angle.
+ *
+ * This function reads the value from the ADS1115 ADC connected to the external potentiometer, maps the value to an angle, and prints the angle to the serial monitor.
+ */
 void potenciometroext()
 {
     int16_t adcValue = ads1.readADC_SingleEnded(0);
