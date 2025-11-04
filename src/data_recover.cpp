@@ -54,10 +54,6 @@ const float PIRANOMETRO_SENSITIVITY = 0.02; // Sensibilidad en mV por W/m^2, ¡a
 
 // Sensor de Inclinación MPU6050 (para el panel seguidor)
 MPU6050 mpuSeguidor(0x69);
-// Offsets de calibración para el MPU6050 (ajusta según tu sensor)
-int ax_offset = -2632;
-int ay_offset = -938;
-int az_offset = 467;
 
 // --- DECLARACIÓN DE FUNCIONES ---
 float getPowerSeguidor();
@@ -67,6 +63,8 @@ void getAngulosSeguidor(float &angleX, float &angleY);
 int getAnguloFijo();
 void printCSVHeader(Stream &output); // Modificada para aceptar cualquier salida (Serial o File)
 void logData();
+void calibrateMPU();
+void meanSensors(int &mean_ax, int &mean_ay, int &mean_az);
 
 // =================================================================
 // --- SETUP ---
@@ -96,9 +94,9 @@ void setup()
     mpuSeguidor.initialize();
     if (mpuSeguidor.testConnection())
     {
-        mpuSeguidor.setXAccelOffset(ax_offset);
-        mpuSeguidor.setYAccelOffset(ay_offset);
-        mpuSeguidor.setZAccelOffset(az_offset);
+        Serial.println("MPU6050 connection successful");
+        Serial.println("Calibrating MPU6050...");
+        calibrateMPU();
     }
     else
     {
@@ -250,4 +248,79 @@ int getAnguloFijo()
     int16_t adcValue = adsPotenciometro.readADC_SingleEnded(0);
     int angle = map(adcValue, 0, 21845, 0, 180);
     return constrain(angle, 0, 180);
+}
+
+void calibrateMPU()
+{
+    int ax_offset, ay_offset, az_offset;
+    int mean_ax, mean_ay, mean_az;
+    int acel_deadzone = 8;
+    int ready = 0;
+
+    // First, get initial sensor readings
+    meanSensors(mean_ax, mean_ay, mean_az);
+
+    // Calculate offsets
+    ax_offset = -mean_ax / 8;
+    ay_offset = -mean_ay / 8;
+    az_offset = (16384 - mean_az) / 8;
+
+    while (ready < 3)
+    {
+        ready = 0;
+        mpuSeguidor.setXAccelOffset(ax_offset);
+        mpuSeguidor.setYAccelOffset(ay_offset);
+        mpuSeguidor.setZAccelOffset(az_offset);
+
+        meanSensors(mean_ax, mean_ay, mean_az);
+
+        if (abs(mean_ax) <= acel_deadzone)
+            ready++;
+        else
+            ax_offset = ax_offset - mean_ax / acel_deadzone;
+
+        if (abs(mean_ay) <= acel_deadzone)
+            ready++;
+        else
+            ay_offset = ay_offset - mean_ay / acel_deadzone;
+
+        if (abs(16384 - mean_az) <= acel_deadzone)
+            ready++;
+        else
+            az_offset = az_offset + (16384 - mean_az) / acel_deadzone;
+    }
+
+    Serial.println("MPU6050 calibrated!");
+    Serial.print("Offsets: ");
+    Serial.print(ax_offset);
+    Serial.print(", ");
+    Serial.print(ay_offset);
+    Serial.print(", ");
+    Serial.println(az_offset);
+}
+
+void meanSensors(int &mean_ax, int &mean_ay, int &mean_az)
+{
+    long i = 0, buff_ax = 0, buff_ay = 0, buff_az = 0;
+    int16_t ax, ay, az, gx, gy, gz;
+    const int buffersize = 1000;
+
+    while (i < (buffersize + 101))
+    {
+        mpuSeguidor.getAcceleration(&ax, &ay, &az);
+
+        if (i > 100 && i <= (buffersize + 100))
+        {
+            buff_ax += ax;
+            buff_ay += ay;
+            buff_az += az;
+        }
+        if (i == (buffersize + 100))
+        {
+            mean_ax = buff_ax / buffersize;
+            mean_ay = buff_ay / buffersize;
+            mean_az = buff_az / buffersize;
+        }
+        i++;
+    }
 }
